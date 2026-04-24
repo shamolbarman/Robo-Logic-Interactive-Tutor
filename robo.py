@@ -1,0 +1,257 @@
+import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+import requests
+import base64
+from gtts import gTTS
+import google.generativeai as genai
+
+GOOGLE_API_KEY = "AIzaSyArr00ytfkSgv0KnhJbLULi8Ne-vZ0rcKE" 
+SERPAPI_KEY = "d53b1588d8a5eff807ed6030aeba40399aced77d4260e874ed389a56419a226d" 
+
+genai.configure(api_key=GOOGLE_API_KEY)
+
+st.set_page_config(page_title="Robo Logic Tutor", layout="wide")
+
+st.markdown("<h1 style='text-align:center; font-size:50px;'>Welcome to Robo-Logic Tutor</h1>", unsafe_allow_html=True)
+
+
+def speak(text):
+    try:
+        tts = gTTS(text=text, lang="en")
+        tts.save("voice.mp3")
+        with open("voice.mp3", "rb") as f:
+            audio = base64.b64encode(f.read()).decode()
+        st.markdown(
+            f"<audio autoplay><source src='data:audio/mp3;base64,{audio}'></audio>",
+            unsafe_allow_html=True
+        )
+    except:
+        pass
+
+
+if "welcome_done" not in st.session_state:
+    speak("Welcome to Robo Logic Tutor Autonomous Robotics AI")
+    st.session_state.welcome_done = True
+
+
+def web_search(q):
+    try:
+        r = requests.get(
+            "https://serpapi.com/search.json",
+            params={"q": q, "api_key": SERPAPI_KEY}
+        ).json()
+
+        out = []
+        for i in r.get("organic_results", [])[:3]:
+            out.append(i.get("title", "") + " " + i.get("snippet", ""))
+
+        return "\n".join(out)
+    except:
+        return ""
+
+
+def ai_brain(q, context):
+
+    if not context:
+        context = "No web data available. Use general robotics knowledge."
+
+    model = genai.GenerativeModel("gemini-1.5-flash")
+
+    prompt = f"""
+You are a robotics AI engineer.
+
+Task:
+{q}
+
+Context:
+{context}
+
+Give:
+- Motion plan
+- Energy reasoning
+- Control strategy
+"""
+
+    try:
+        res = model.generate_content(prompt)
+        return res.text
+    except Exception as e:
+        return str(e)
+
+
+menu = st.sidebar.radio("", [
+    "Planner",
+    "Simulation",
+    "Trajectory",
+    "Physics",
+    "AI Brain",
+    "RL Planner",
+    "PyBullet Simulation",
+    "Quiz"
+])
+
+
+if menu == "Planner":
+
+    q = st.text_area("", "Move robot from A to B with minimum energy")
+
+    if st.button("Generate Plan"):
+        plan = {
+            "trajectory": "Bezier + A* Hybrid",
+            "energy_model": "E = v^2 + jerk^2",
+            "strategy": "Optimal Path Selection"
+        }
+        st.json(plan)
+        speak("Plan generated")
+
+
+elif menu == "Simulation":
+
+    t = np.linspace(0, 10, 100)
+    fast = np.sign(np.sin(t))
+    smooth = np.sin(t)
+    opt = np.sin(t) * np.exp(-0.1 * t)
+
+    fig, ax = plt.subplots()
+    ax.plot(t, fast)
+    ax.plot(t, smooth)
+    ax.plot(t, opt)
+    st.pyplot(fig)
+
+
+elif menu == "Trajectory":
+
+    t = np.linspace(0, 10, 100)
+    p = np.sin(t)
+    j = np.diff(p, prepend=0)
+
+    fig, ax = plt.subplots()
+    ax.plot(t, p)
+    ax.plot(t, j)
+    st.pyplot(fig)
+
+
+elif menu == "Physics":
+
+    t = np.linspace(0, 10, 100)
+    v = np.sin(t)
+    e = v ** 2
+
+    fig, ax = plt.subplots()
+    ax.plot(t, e)
+    st.pyplot(fig)
+
+    st.metric("Energy", np.sum(e))
+
+
+elif menu == "AI Brain":
+
+    q = st.text_area("", "Ask robotics question")
+
+    if st.button("Ask"):
+
+        context = web_search(q)
+
+        if not context:
+            context = "No web data available. Use general robotics knowledge."
+
+        ans = ai_brain(q, context)
+
+        st.write(ans)
+
+        if context:
+            st.caption("Web Context")
+            st.code(context)
+
+        speak("Here is your answer")
+
+
+elif menu == "RL Planner":
+
+    episodes = st.slider("Episodes", 10, 200, 50)
+
+    rewards = []
+
+    for ep in range(episodes):
+        state = np.random.rand()
+        total = 0
+
+        for step in range(50):
+            action = np.random.rand()
+            reward = -(state - action) ** 2
+            total += reward
+            state = action
+
+        rewards.append(total)
+
+    fig, ax = plt.subplots()
+    ax.plot(rewards)
+    st.pyplot(fig)
+
+    st.success("RL Training Complete")
+
+
+elif menu == "PyBullet Simulation":
+    import pybullet as p
+    import pybullet_data
+    import time
+
+    if st.button("Run Simulation"):
+        # Connecting the simulation engine
+        p.connect(p.GUI)
+        p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        p.setGravity(0, 0, -9.8)
+
+        # Loading environment
+        p.loadURDF("plane.urdf")
+        # Loading Kuka IIWA robot arm
+        robot = p.loadURDF("kuka_iiwa/model.urdf", useFixedBase=True)
+
+        # 200 step loop to move the robot
+        for i in range(200):
+            angle = np.sin(i * 0.03)
+
+            # Controlling 7 joints of the robot
+            for j in range(7):
+                p.setJointMotorControl2(
+                    robot, j, p.POSITION_CONTROL, targetPosition=angle
+                )
+
+            p.stepSimulation()
+            time.sleep(1 / 240)
+
+        st.success("Simulation Complete")
+
+
+elif menu == "Quiz":
+
+    base = {
+        "Robotics": [("What is PID?", "Control system")],
+        "AI": [("What is LLM?", "Large Language Model")],
+        "Physics": [("Force formula?", "Mass x acceleration")]
+    }
+
+    for i in range(1, 300):
+        base["Robotics"].append((f"DOF {i}?", str(3 * i)))
+        base["AI"].append((f"AI {i}?", "Yes"))
+        base["Physics"].append((f"Force {i}?", str(2 * i)))
+
+    cat = st.selectbox("", list(base.keys()))
+
+    if st.button("Get Question"):
+        q, a = random.choice(base[cat])
+        st.write(q)
+        st.session_state.ans = a
+
+    if "ans" in st.session_state:
+        u = st.text_input("Answer")
+
+        if st.button("Submit"):
+            if u.lower() == st.session_state.ans.lower():
+                st.success("Correct")
+                speak("Correct answer")
+            else:
+                st.error(st.session_state.ans)
+                speak("Wrong answer")
