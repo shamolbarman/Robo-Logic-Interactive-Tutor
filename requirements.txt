@@ -1,0 +1,6 @@
+streamlit
+pybullet
+google-generativeai
+matplotlib
+numpy
+gTTS
